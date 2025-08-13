@@ -1,0 +1,49 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a//dev/null b/.github/workflows/deploy.yml
+index 0000000000000000000000000000000000000000..1f836f38e0256f16b2c2751935e6a5570fe47c3f 100644
+--- a//dev/null
++++ b/.github/workflows/deploy.yml
+@@ -0,0 +1,40 @@
++name: Deploy to GitHub Pages
++
++on:
++  push:
++    branches: [ main ]
++  workflow_dispatch:
++
++permissions:
++  contents: read
++  pages: write
++  id-token: write
++
++concurrency:
++  group: pages
++  cancel-in-progress: true
++
++jobs:
++  build:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with:
++          node-version: 20
++          cache: npm
++      - run: npm ci
++      - run: npm run build
++      - uses: actions/upload-pages-artifact@v3
++        with:
++          path: ./dist
++
++  deploy:
++    needs: build
++    runs-on: ubuntu-latest
++    environment:
++      name: github-pages
++      url: ${{ steps.deployment.outputs.page_url }}
++    steps:
++      - id: deployment
++        uses: actions/deploy-pages@v4
+ 
+EOF
+)
