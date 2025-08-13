@@ -3,7 +3,7 @@ index 0000000000000000000000000000000000000000..cf85bb9e4d7773302a246033a16ff184
 --- a//dev/null
 +++ b/.github/workflows/deploy.yml
 @@ -0,0 +1,41 @@
-+name: Deploy to GitHub Pages
++name: deploy to GitHub Pages
 +
 +'on':
 +  push:
