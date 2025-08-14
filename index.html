@@ -1,13 +1,165 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PCV Valve Simulator</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Remover metadados de imagem</title>
+  <style>
+    body {font-family: sans-serif; margin: 1rem;}
+    h1 {text-align:center;}
+    .controls{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;margin-bottom:1rem;}
+    #dropzone{border:2px dashed #888;padding:2rem;text-align:center;border-radius:8px;cursor:pointer;outline:none;}
+    #dropzone.focus{border-color:#06f;background:#eef;}
+    .previews{display:flex;flex-wrap:wrap;gap:1rem;justify-content:center;margin-top:1rem;}
+    .preview{flex:1 1 300px;text-align:center;}
+    img{max-width:100%;height:auto;border:1px solid #ccc;border-radius:4px;}
+    label{display:block;font-size:.9rem;margin-top:.5rem;}
+    #messages{margin-top:1rem;color:#c00;min-height:1.2em;}
+    @media(max-width:600px){.previews{flex-direction:column;}}
+  </style>
+</head>
+<body>
+  <h1>Remover Metadados de Imagens</h1>
+  <p style="text-align:center">Processamento offline; sem upload.</p>
+
+  <div class="controls">
+    <input type="file" id="fileInput" accept="image/*" style="display:none" />
+    <input type="file" id="iosInput" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" />
+    <button id="fileBtn">Upload padrão</button>
+    <button id="iosBtn">iPhone/iPad (força JPEG)</button>
+    <select id="format">
+      <option value="keep">Manter formato</option>
+      <option value="image/jpeg">JPEG</option>
+      <option value="image/png">PNG</option>
+      <option value="image/webp">WebP</option>
+    </select>
+    <label>Qualidade <input type="range" id="quality" min="0.1" max="1" step="0.05" value="0.92" /> <span id="qVal">0.92</span></label>
+    <button id="processBtn">Processar (remover metadados)</button>
+  </div>
+
+  <div id="dropzone" tabindex="0" role="button" aria-label="Arraste, solte, clique ou cole imagem">Arraste, solte, clique ou cole imagem aqui</div>
+
+  <div class="previews">
+    <div class="preview">
+      <h2>Original</h2>
+      <div id="origInfo"></div>
+      <img id="origPreview" alt="Prévia original" />
+    </div>
+    <div class="preview">
+      <h2>Sem metadados</h2>
+      <div id="cleanInfo"></div>
+      <img id="cleanPreview" alt="Prévia sem metadados" />
+    </div>
+  </div>
+
+  <div id="messages" aria-live="polite"></div>
+
+  <script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const iosInput = document.getElementById('iosInput');
+  const fileBtn = document.getElementById('fileBtn');
+  const iosBtn = document.getElementById('iosBtn');
+  const processBtn = document.getElementById('processBtn');
+  const formatSel = document.getElementById('format');
+  const qualityRange = document.getElementById('quality');
+  const qVal = document.getElementById('qVal');
+  const msg = document.getElementById('messages');
+  const origPreview = document.getElementById('origPreview');
+  const cleanPreview = document.getElementById('cleanPreview');
+  const origInfo = document.getElementById('origInfo');
+  const cleanInfo = document.getElementById('cleanInfo');
+
+  let currentFile = null;
+
+  function setMessage(t){msg.textContent=t||'';}
+  function formatBytes(b){return (b/1024).toFixed(1)+' KB';}
+
+  fileBtn.onclick=()=>fileInput.click();
+  iosBtn.onclick=()=>iosInput.click();
+  qualityRange.oninput=()=>{qVal.textContent=qualityRange.value;};
+
+  function handleFiles(files){
+    if(!files||!files.length)return;
+    const file = files[0];
+    currentFile = file;
+    const url = URL.createObjectURL(file);
+    origPreview.src = url;
+    origInfo.textContent = file.type+" - "+formatBytes(file.size);
+    cleanPreview.removeAttribute('src');
+    cleanInfo.textContent='';
+    setMessage('');
+  }
+
+  fileInput.addEventListener('change', e=>handleFiles(e.target.files));
+  iosInput.addEventListener('change', e=>handleFiles(e.target.files));
+
+  dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('focus');});
+  dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('focus'));
+  dropzone.addEventListener('drop',e=>{e.preventDefault();dropzone.classList.remove('focus');handleFiles(e.dataTransfer.files);});
+  dropzone.addEventListener('click',()=>fileInput.click());
+  dropzone.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();}});
+
+  document.addEventListener('paste',e=>{if(e.clipboardData.files.length)handleFiles(e.clipboardData.files);});
+
+  async function loadImage(file){
+    let blob = file;
+    if(!file.type){ // fallback FileReader
+      blob = await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(new Blob([fr.result]));fr.readAsArrayBuffer(file);});
+    }
+    try{
+      return await createImageBitmap(blob,{imageOrientation:'from-image'});
+    }catch(err){
+      return await new Promise((res,rej)=>{
+        const img=new Image();
+        img.onload=()=>res(img);
+        img.onerror=rej;
+        img.src=URL.createObjectURL(blob);
+      });
+    }
+  }
+
+  function canvasToBlob(canvas,type,quality){
+    return new Promise(res=>{
+      if(canvas.toBlob){
+        canvas.toBlob(b=>res(b),type,quality);
+      }else{
+        const dataUrl=canvas.toDataURL(type,quality);
+        fetch(dataUrl).then(r=>r.blob()).then(res);
+      }
+    });
+  }
+
+  function getExt(type){
+    return {"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}[type]||"png";
+  }
+
+  function unsupported(t){return /(heic|heif|tiff)/i.test(t);}
+
+  processBtn.addEventListener('click',async()=>{
+    if(!currentFile){setMessage('Selecione uma imagem.');return;}
+    let type=currentFile.type;
+    if(!type){setMessage('Tipo de arquivo desconhecido.');}
+    if(unsupported(type)){setMessage('Formato não suportado. Converta para PNG/JPEG/WebP ou use o botão iPhone/iPad.');return;}
+    const img=await loadImage(currentFile);
+    const canvas=document.createElement('canvas');
+    canvas.width=img.width;canvas.height=img.height;
+    canvas.getContext('2d').drawImage(img,0,0);
+    let outType=formatSel.value==='keep'? (type||'image/png'):formatSel.value;
+    let quality=parseFloat(qualityRange.value);
+    if(outType!=='image/jpeg' && outType!=='image/webp'){quality=undefined;}
+    const blob=await canvasToBlob(canvas,outType,quality);
+    const url=URL.createObjectURL(blob);
+    cleanPreview.src=url;
+    cleanInfo.textContent=blob.type+" - "+formatBytes(blob.size);
+    const a=document.createElement('a');
+    const base=(currentFile.name?currentFile.name.replace(/\.[^/.]+$/,''):'imagem');
+    a.download=base+'-sem-metadados.'+getExt(outType);
+    a.href=url;
+    a.textContent='Download';
+    cleanInfo.appendChild(document.createElement('br'));
+    cleanInfo.appendChild(a);
+  });
+  </script>
+</body>
 </html>
