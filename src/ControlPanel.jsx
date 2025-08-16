@@ -39,6 +39,7 @@ export default function ControlPanel({ controls, setControls, stats, onPlay, onS
         <button className="flex-1 bg-yellow-600 rounded" onClick={onStep}>Passo</button>
         <button className="flex-1 bg-red-600 rounded" onClick={onReset}>Reset</button>
       </div>
+      <a href="/pcv-info.html" className="block bg-green-600 rounded text-center py-1">Como funciona a PCV?</a>
       <div className="text-[10px] space-y-1">
         <div>Pressão: {stats.pressao.toFixed(1)} kPa</div>
         <div>Válvulas: {controls.diafragma ? 'vazando' : 'ok'}</div>
